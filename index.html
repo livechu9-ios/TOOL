@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>UMA MULTI TOOL</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="container" id="mainTool">
+  <div class="logo-wrap">
+    <img id="logoImg" class="logo" alt="Logo" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='46' fill='none' stroke='%237ee8fa' stroke-width='3'/><text x='50' y='62' font-size='42' font-family='monospace' font-weight='bold' fill='%23a8f0ff' text-anchor='middle'>U</text></svg>">
+  </div>
+  <h1>UMA MULTI TOOL</h1>
+  <div class="subtitle">Chỉnh Hex (đổi tên bone)</div>
+
+  <div id="status" class="status wait">Chưa chọn file</div>
+
+  <div class="box">
+    <h2>1. Chọn file</h2>
+    <input type="file" id="fileInputHex">
+    <div class="hint">Tên file phải đúng: <b>assetindexer.U6Zffc4YIR3DslNj3cXvYGAqz58~3D</b></div>
+  </div>
+
+  <div class="box">
+    <h2>2. Danh sách thay bone</h2>
+    <div class="hint">Mỗi dòng là 1 bone. Dòng trên và dòng dưới tương ứng theo thứ tự.</div>
+
+    <label>Tên bone GỐC (trên)<span class="count-badge" id="countOld">0</span></label>
+    <textarea id="listOld" placeholder="bone_Head&#10;bone_Neck&#10;bone_Spine&#10;..." spellcheck="false"></textarea>
+
+    <label>Tên bone THAY THẾ (dưới)<span class="count-badge" id="countNew">0</span></label>
+    <textarea id="listNew" placeholder="bone_NewHead&#10;bone_NewNeck&#10;bone_NewSpine&#10;..." spellcheck="false"></textarea>
+
+    <button class="secondary" id="btnFillDemo">Điền 56 bone mẫu</button>
+    <button class="secondary" id="btnClearList">Xóa hết</button>
+  </div>
+
+  <div class="box">
+    <h2>3. Thực hiện</h2>
+    <button id="btnApplyHex" disabled>THAY BONE</button>
+  </div>
+
+  <div class="box">
+    <h2>Xuất file</h2>
+    <button id="btnSave" disabled>Chia sẻ file đã chỉnh</button>
+    <button class="secondary" id="btnSaveOriginal" disabled>Chia sẻ file gốc</button>
+  </div>
+
+  <div class="box">
+    <h2>Log</h2>
+    <div id="log">Sẵn sàng...</div>
+  </div>
+</div>
+
+<a id="downloadLink" style="display:none"></a>
+
+<script src="script.js"></script>
+</body>
+</html>
