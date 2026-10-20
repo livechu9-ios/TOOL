@@ -136,6 +136,7 @@ function md5Bytes(bytes) {
 
 // ==================== CHUNG ====================
 const REQUIRED_FILENAME = 'assetindexer.U6Zffc4YIR3DslNj3cXvYGAqz58~3D';
+const BONE_PREFIX = 'bone_';
 let fileBytes = null;
 let fileBytesBackup = null;
 let currentFileName = '';
@@ -159,6 +160,32 @@ function setStatus(msg, cls = 'wait') {
   } catch (e) {}
 }
 
+// ==================== VALIDATE TÊN BONE (BẮT BUỘC bone_) ====================
+// Tên bone hợp lệ: phải bắt đầu bằng "bone_" và có ít nhất 1 ký tự sau prefix
+function isValidBoneName(name) {
+  if (typeof name !== 'string') return false;
+  if (!name.startsWith(BONE_PREFIX)) return false;
+  const rest = name.slice(BONE_PREFIX.length);
+  if (rest.length === 0) return false;
+  if (/[\x00\r\n\t]/.test(name)) return false;
+  return true;
+}
+
+function validateBoneLists(oldLines, newLines) {
+  const errors = [];
+  for (let i = 0; i < oldLines.length; i++) {
+    if (!isValidBoneName(oldLines[i])) {
+      errors.push(`Dòng ${i + 1} (GỐC): "${oldLines[i]}" — phải bắt đầu bằng "${BONE_PREFIX}" và có tên sau prefix.`);
+    }
+  }
+  for (let i = 0; i < newLines.length; i++) {
+    if (!isValidBoneName(newLines[i])) {
+      errors.push(`Dòng ${i + 1} (THAY THẾ): "${newLines[i]}" — phải bắt đầu bằng "${BONE_PREFIX}" và có tên sau prefix.`);
+    }
+  }
+  return errors;
+}
+
 // ==================== CHỌN FILE ====================
 function handleFileSelect(file) {
   if (!file) return;
@@ -176,16 +203,30 @@ function handleFileSelect(file) {
   reader.onload = function(ev) {
     try {
       const buffer = ev.target.result;
-      fileBytes = new Uint8Array(buffer);
-      fileBytesBackup = new Uint8Array(buffer);
+      const tempBytes = new Uint8Array(buffer);
       currentFileName = file.name;
       modified = false;
+
       log(`\nĐã chọn: ${file.name}`, 'ok');
-      log(`Kích thước: ${fileBytes.length} bytes`, 'info');
-      const count = countBoneStrings(fileBytes);
-      log(`Tìm thấy ${count} chuỗi bone trong file`, 'ok');
-      if (count === 0) { setStatus('Không tìm thấy bone', 'err'); updateButtons(false); return; }
-      setStatus(`Đã load - ${count} bone`, 'ok');
+      log(`Kích thước: ${tempBytes.length} bytes`, 'info');
+
+      // ĐẾM chuỗi bone_ đúng chuẩn trong file
+      const found = findBoneNames(tempBytes);
+      log(`Tìm thấy ${found.length} chuỗi bone_ trong file`, 'ok');
+
+      // BẮT BUỘC: file phải có ít nhất 1 chuỗi bone_ đúng chuẩn
+      if (found.length === 0) {
+        setStatus('File không đúng chuẩn bone_', 'err');
+        log('File KHÔNG chứa chuỗi nào bắt đầu bằng "bone_".', 'error');
+        log('Đây không phải file bone hợp lệ, tool không xử lý.', 'error');
+        fileBytes = null; fileBytesBackup = null; currentFileName = '';
+        updateButtons(false);
+        return;
+      }
+
+      fileBytes = tempBytes;
+      fileBytesBackup = new Uint8Array(buffer);
+      setStatus(`Đã load - ${found.length} bone_`, 'ok');
       updateButtons(true);
     } catch (err) {
       log('Lỗi xử lý file: ' + err.message, 'error');
@@ -208,28 +249,12 @@ function updateButtons(enabled) {
   } catch (e) {}
 }
 
-// ==================== ĐẾM BONE ====================
+// ==================== ĐẾM BONE (chỉ đếm chuỗi bắt đầu bằng bone_) ====================
 function countBoneStrings(bytes) {
-  let count = 0;
-  let pos = 0;
-  const len = bytes.length;
-  while (pos < len - 5) {
-    if (bytes[pos] === 0x62 && bytes[pos+1] === 0x6F &&
-        bytes[pos+2] === 0x6E && bytes[pos+3] === 0x65 &&
-        bytes[pos+4] === 0x5F) {
-      let end = pos + 5;
-      while (end < len && bytes[end] !== 0x00) end++;
-      const name = new TextDecoder('utf-8').decode(bytes.subarray(pos, end));
-      if (name.length > 5) count++;
-      pos = end;
-    } else {
-      pos++;
-    }
-  }
-  return count;
+  return findBoneNames(bytes).length;
 }
 
-// ==================== TAB 1: HEX RENAMER ====================
+// ==================== TÌM TÊN BONE (CHỈ chuỗi bắt đầu bằng bone_) ====================
 function findBoneNames(bytes) {
   const results = [];
   const len = bytes.length;
@@ -238,9 +263,11 @@ function findBoneNames(bytes) {
     if (bytes[pos] === 0x62 && bytes[pos+1] === 0x6F &&
         bytes[pos+2] === 0x6E && bytes[pos+3] === 0x65 &&
         bytes[pos+4] === 0x5F) {
+      // đã khớp "bone_"
       let end = pos + 5;
       while (end < len && bytes[end] !== 0x00) end++;
       const name = new TextDecoder('utf-8').decode(bytes.subarray(pos, end));
+      // phải có ít nhất 1 ký tự sau "bone_"
       if (name.length > 5) {
         results.push({ name, start: pos, end: end });
       }
@@ -252,9 +279,10 @@ function findBoneNames(bytes) {
   return results;
 }
 
+// ==================== THAY BONE ====================
 function renameBones(bytes, mapping) {
   const found = findBoneNames(bytes);
-  log(`Tìm thấy ${found.length} chuỗi bone trong file`, 'info');
+  log(`Tìm thấy ${found.length} chuỗi bone_ trong file`, 'info');
   let applied = 0;
   const appliedSet = new Set();
   for (const item of found) {
@@ -300,6 +328,7 @@ document.getElementById('btnApplyHex').addEventListener('click', () => {
     const newText = document.getElementById('listNew').value;
     const oldLines = oldText.split(/\r?\n/).map(l => l.trim()).filter(l => l !== '');
     const newLines = newText.split(/\r?\n/).map(l => l.trim()).filter(l => l !== '');
+
     if (oldLines.length === 0) { log('Chưa ghi tên bone gốc!', 'warn'); return; }
     if (newLines.length === 0) { log('Chưa ghi tên bone thay thế!', 'warn'); return; }
     if (oldLines.length !== newLines.length) {
@@ -307,6 +336,34 @@ document.getElementById('btnApplyHex').addEventListener('click', () => {
       setStatus('Số dòng không khớp', 'err');
       return;
     }
+
+    // BẮT BUỘC: cả 2 danh sách phải đúng chuẩn bone_
+    const errors = validateBoneLists(oldLines, newLines);
+    if (errors.length > 0) {
+      log(`\nPhát hiện ${errors.length} tên bone không hợp lệ:`, 'error');
+      for (const err of errors) log('  ' + err, 'error');
+      setStatus('Tên bone không hợp lệ', 'err');
+      return;
+    }
+
+    // Kiểm tra trùng tên GỐC
+    const seen = new Map();
+    const duplicates = [];
+    for (let i = 0; i < oldLines.length; i++) {
+      if (seen.has(oldLines[i])) {
+        duplicates.push(`"${oldLines[i]}" (dòng ${seen.get(oldLines[i])} và ${i + 1})`);
+      } else {
+        seen.set(oldLines[i], i + 1);
+      }
+    }
+    if (duplicates.length > 0) {
+      log(`\nTên bone GỐC bị trùng:`, 'error');
+      for (const d of duplicates) log('  ' + d, 'error');
+      setStatus('Tên gốc bị trùng', 'err');
+      return;
+    }
+
+    // Build mapping
     const mapping = {};
     for (let i = 0; i < oldLines.length; i++) {
       const o = oldLines[i];
@@ -316,6 +373,7 @@ document.getElementById('btnApplyHex').addEventListener('click', () => {
     }
     const keys = Object.keys(mapping);
     if (keys.length === 0) { log('Không có cặp nào cần thay (tên giống nhau hết)!', 'warn'); return; }
+
     log(`\nBắt đầu thay ${keys.length} bone...`, 'info');
     const result = renameBones(fileBytes, mapping);
     log(`\nKết quả: ${result.applied} đã thay, ${result.notFound} không tìm thấy`, 'ok');
@@ -425,5 +483,6 @@ document.getElementById('btnClearList').addEventListener('click', () => {
 // ==================== KHỞI TẠO ====================
 updateCounts();
 log('Tool sẵn sàng. Chọn file asset để bắt đầu.', 'ok');
+log(`BẮT BUỘC: file phải chứa chuỗi "${BONE_PREFIX}..." và mọi tên bone nhập vào phải bắt đầu bằng "${BONE_PREFIX}".`, 'info');
 if (navigator.canShare) log('Trinh duyet ho tro Share Sheet', 'ok');
 else log('Trinh duyet khong ho tro Share, se tai file khi bam nut', 'warn');
